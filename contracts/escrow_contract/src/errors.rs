@@ -110,6 +110,12 @@ pub enum EcErr {
     E85 = 85,
     /// Slippage tolerance has been exceeded; the release is rejected.
     E86 = 86,
+    /// Evidence reference is empty.
+    EvidenceEmpty = 93,
+    /// Evidence reference or hash exceeds allowed length.
+    EvidenceTooLong = 94,
+    /// Evidence reference format is invalid (invalid characters, invalid CID/hash format).
+    EvidenceInvalidFormat = 95,
 }
 
 /// Backward-compatible alias — existing code imports `EscrowError`; the oracle

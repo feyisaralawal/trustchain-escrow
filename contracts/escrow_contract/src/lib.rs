@@ -114,13 +114,14 @@ mod upgrade_tests;
 pub use errors::EscrowError;
 use storage::StorageManager;
 pub use types::{
-    ApprovalRecord, ContractVersionInfo, DataKey, EscrowFeeSnapshot, EscrowState, EscrowStatus,
-    EscrowTemplate, FeeTier, Milestone, MilestoneStatus, MilestoneTemplate, MultisigConfig,
-    OptionalBytesN32, OptionalPriceCondition, OptionalTimelock, OracleResolutionPayload,
-    PriceCondition, PriceDirection, RecurringInterval, RecurringScheduleStatus, ReputationRecord,
-    StateHistoryEntry, Timelock, MS_APPROVED, MS_DISPUTED, MS_PENDING, MS_REJECTED, MS_RELEASED,
-    MS_SUBMITTED,
+    ApprovalRecord, ContractVersionInfo, DataKey, DisputeEvidence, EscrowFeeSnapshot, EscrowState,
+    EscrowStatus, EscrowTemplate, FeeTier, Milestone, MilestoneStatus, MilestoneTemplate,
+    MultisigConfig, OptionalBytesN32, OptionalPriceCondition, OptionalTimelock,
+    OracleResolutionPayload, PriceCondition, PriceDirection, RecurringInterval,
+    RecurringScheduleStatus, ReputationRecord, StateHistoryEntry, Timelock, MS_APPROVED,
+    MS_DISPUTED, MS_PENDING, MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
 };
+pub use state_history::{MAX_HISTORY_PAGE_SIZE, MAX_STATE_HISTORY_ENTRIES};
 use types::{CancellationRequest, RecurringPaymentConfig, SlashRecord};
 use types::{FundPayload, ProposalPayload, ProposalType};
 
@@ -3535,6 +3536,17 @@ impl EscrowContract {
         state_history::get_state_history(&env, escrow_id)
     }
 
+    /// Returns a bounded/paginated slice of state history for a given escrow.
+    /// Contract entry point: `get_state_history_bounded`.
+    pub fn get_state_history_bounded(
+        env: Env,
+        escrow_id: u64,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<StateHistoryEntry> {
+        state_history::get_state_history_bounded(&env, escrow_id, offset, limit)
+    }
+
     /// Client rejects a submitted milestone.
     ///
     /// # Gas notes
@@ -5134,6 +5146,14 @@ impl EscrowContract {
     }
 
     // ── Dispute Evidence ──────────────────────────────────────────────
+
+    /// Validates an evidence reference string (IPFS CIDv0, CIDv1, or Hex SHA-256).
+    /// Rejects empty values, oversized values (> 128 chars), and invalid characters.
+    /// Contract entry point: `validate_evidence_reference`.
+    pub fn validate_evidence_reference(env: Env, evidence_ref: String) -> Result<(), EscrowError> {
+        let _ = env;
+        validation::validate_evidence_reference(&evidence_ref)
+    }
 
     /// Add evidence hash to a disputed escrow.
     ///

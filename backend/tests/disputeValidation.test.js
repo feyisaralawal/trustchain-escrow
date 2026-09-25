@@ -143,4 +143,47 @@ describe('dispute route validation', () => {
       }),
     );
   });
+
+  describe('dispute evidence hash and CID validation', () => {
+    it('accepts valid IPFS CIDv0 format', async () => {
+      const { isValidEvidenceHash } = await import('../middleware/validation.js');
+      expect(isValidEvidenceHash('QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco')).toBe(true);
+    });
+
+    it('accepts valid IPFS CIDv1 format', async () => {
+      const { isValidEvidenceHash } = await import('../middleware/validation.js');
+      expect(isValidEvidenceHash('bafybeic56wh45asvf7ggn7p7pu2475y7k7j6n72u5quq4pynvaxevv2nha')).toBe(true);
+    });
+
+    it('accepts valid 64-char Hex SHA-256 format', async () => {
+      const { isValidEvidenceHash } = await import('../middleware/validation.js');
+      expect(isValidEvidenceHash('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')).toBe(true);
+    });
+
+    it('rejects empty evidence hash', async () => {
+      const { isValidEvidenceHash } = await import('../middleware/validation.js');
+      expect(isValidEvidenceHash('')).toBe(false);
+      expect(isValidEvidenceHash(null)).toBe(false);
+      expect(isValidEvidenceHash(undefined)).toBe(false);
+    });
+
+    it('rejects oversized evidence hash (> 128 characters)', async () => {
+      const { isValidEvidenceHash } = await import('../middleware/validation.js');
+      const oversized = 'a'.repeat(129);
+      expect(isValidEvidenceHash(oversized)).toBe(false);
+    });
+
+    it('rejects evidence hash with invalid characters', async () => {
+      const { isValidEvidenceHash } = await import('../middleware/validation.js');
+      expect(isValidEvidenceHash('QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6!@#')).toBe(false);
+      expect(isValidEvidenceHash('QmXoypizjW3WknFiJnKLwHCnL 72vedxjQkDDP1mXWo6uco')).toBe(false);
+    });
+
+    it('rejects malformed CIDv0 (invalid base58 chars)', async () => {
+      const { isValidEvidenceHash } = await import('../middleware/validation.js');
+      // Contains '0' which is excluded in base58btc
+      expect(isValidEvidenceHash('Qm00000000000000000000000000000000000000000000')).toBe(false);
+    });
+  });
 });
+

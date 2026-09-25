@@ -70,6 +70,7 @@ import { createGateway } from './gateway/index.js';
 import queueDashboardRoutes from './api/routes/queueDashboardRoutes.js';
 import chatRoutes from './api/routes/chatRoutes.js';
 import expiryRoutes from './api/routes/expiryRoutes.js';
+import configRoutes from './api/routes/configRoutes.js';
 
 // Attach Prisma query instrumentation (metrics + traces)
 attachPrismaMetrics(prisma);
@@ -215,6 +216,7 @@ app.use('/api/batch', batchRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/expiry', expiryRoutes);
+app.use('/api/config', configRoutes);
 app.use('/admin/queues', queueDashboardRoutes);
 app.use('/docs', docsRouter);
 // Alias — acceptance criteria requires /api-docs

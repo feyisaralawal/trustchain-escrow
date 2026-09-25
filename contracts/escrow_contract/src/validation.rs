@@ -93,6 +93,82 @@ pub fn validate_signer_count(count: u32) -> Result<(), EscrowError> {
     Ok(())
 }
 
+/// Minimum length for a valid evidence reference string (CIDv0 is 46, hex sha256 is 64).
+pub const MIN_EVIDENCE_REF_LEN: u32 = 32;
+
+/// Maximum length for a valid evidence reference string.
+pub const MAX_EVIDENCE_REF_LEN: u32 = 128;
+
+/// Validate accepted evidence hash formats and reject empty, oversized, or malformed evidence references.
+/// Supported formats:
+/// - IPFS CIDv0: Base58btc starting with "Qm", exactly 46 characters.
+/// - IPFS CIDv1: Base32 starting with "bafy" or "bafk", length between 50 and 64 characters.
+/// - Hex SHA-256: 64 hexadecimal characters.
+/// Rejects empty values, oversized values (> 128 characters), and invalid characters.
+pub fn validate_evidence_reference(evidence_ref: &String) -> Result<(), EscrowError> {
+    let len = evidence_ref.len();
+    if len == 0 {
+        return Err(EscrowError::EvidenceEmpty);
+    }
+    if len > MAX_EVIDENCE_REF_LEN {
+        return Err(EscrowError::EvidenceTooLong);
+    }
+    if len < MIN_EVIDENCE_REF_LEN {
+        return Err(EscrowError::EvidenceInvalidFormat);
+    }
+
+    let mut buf = [0u8; 128];
+    let slice_len = (len as usize).min(128);
+    evidence_ref.copy_into_slice(&mut buf[..slice_len]);
+    let bytes = &buf[..slice_len];
+
+    // Reject non-alphanumeric characters (spaces, punctuation, control chars)
+    if !bytes.iter().all(|&b| b.is_ascii_alphanumeric()) {
+        return Err(EscrowError::EvidenceInvalidFormat);
+    }
+
+    // IPFS CIDv0 format: "Qm" prefix, 46 characters, Base58btc (no '0', 'O', 'I', 'l')
+    if bytes.starts_with(b"Qm") {
+        if len == 46 {
+            let base58_invalid = bytes.iter().any(|&b| b == b'0' || b == b'O' || b == b'I' || b == b'l');
+            if base58_invalid {
+                return Err(EscrowError::EvidenceInvalidFormat);
+            }
+            return Ok(());
+        }
+        return Err(EscrowError::EvidenceInvalidFormat);
+    }
+
+    // IPFS CIDv1 format: "bafy" or "bafk" prefix, 50-64 characters
+    if bytes.starts_with(b"bafy") || bytes.starts_with(b"bafk") {
+        if len >= 50 && len <= 64 {
+            return Ok(());
+        }
+        return Err(EscrowError::EvidenceInvalidFormat);
+    }
+
+    // Hexadecimal SHA-256 hash: 64 hex characters
+    if len == 64 {
+        let is_hex = bytes.iter().all(|&b| {
+            (b >= b'0' && b <= b'9') || (b >= b'a' && b <= b'f') || (b >= b'A' && b <= b'F')
+        });
+        if is_hex {
+            return Ok(());
+        }
+    }
+
+    Err(EscrowError::EvidenceInvalidFormat)
+}
+
+/// Validate evidence hash (raw 32-byte representation). Rejects zeroed hash.
+pub fn validate_evidence_hash(env: &Env, hash: &BytesN<32>) -> Result<(), EscrowError> {
+    if hash == &BytesN::from_array(env, &[0u8; 32]) {
+        return Err(EscrowError::E80);
+    }
+    Ok(())
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

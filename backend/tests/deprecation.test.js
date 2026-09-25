@@ -144,6 +144,70 @@ describe('Deprecation Middleware', () => {
       expect(res.setHeader).toHaveBeenCalledWith('Deprecation', 'true');
       expect(next).toHaveBeenCalled();
     });
+
+    it('should not set deprecation headers before warningDate', () => {
+      const futureWarningDate = new Date('2030-01-01');
+      const futureSunsetDate = new Date('2031-01-01');
+      const config = {
+        version: 'v1',
+        warningDate: futureWarningDate,
+        sunsetDate: futureSunsetDate,
+        message: 'Future deprecation',
+      };
+
+      const middleware = deprecate(config);
+      middleware(req, res, next);
+
+      expect(res.setHeader).not.toHaveBeenCalledWith('Deprecation', 'true');
+      expect(res.setHeader).not.toHaveBeenCalledWith('Warning', expect.anything());
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should set warning headers when within warning window', () => {
+      const pastWarningDate = new Date('2020-01-01');
+      const futureSunsetDate = new Date('2030-01-01');
+      const config = {
+        version: 'v1',
+        warningDate: pastWarningDate,
+        sunsetDate: futureSunsetDate,
+        replacement: '/api/v2/new',
+        message: 'Active deprecation warning',
+      };
+
+      const middleware = deprecate(config);
+      middleware(req, res, next);
+
+      expect(res.setHeader).toHaveBeenCalledWith('Deprecation', 'true');
+      expect(res.setHeader).toHaveBeenCalledWith('Sunset', futureSunsetDate.toUTCString());
+      expect(res.setHeader).toHaveBeenCalledWith('Warning', expect.stringContaining('Active deprecation warning'));
+      expect(res.setHeader).toHaveBeenCalledWith('X-API-Warning-Date', pastWarningDate.toISOString());
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should block responses with 410 Gone after sunsetDate', () => {
+      const pastWarningDate = new Date('2020-01-01');
+      const pastSunsetDate = new Date('2021-01-01');
+      const config = {
+        version: 'v1',
+        warningDate: pastWarningDate,
+        sunsetDate: pastSunsetDate,
+        replacement: '/api/v2/new',
+      };
+
+      const middleware = deprecate(config);
+      middleware(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(410);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: 'Gone',
+          message: expect.stringContaining('sunset'),
+          sunsetDate: pastSunsetDate.toISOString(),
+          replacement: '/api/v2/new',
+        }),
+      );
+      expect(next).not.toHaveBeenCalled();
+    });
   });
 
   describe('enforceSunset()', () => {

@@ -5,6 +5,11 @@ use crate::types::{DataKey, DisputeEvidence, EscrowStatus};
 use crate::ContractStorage;
 use crate::MAX_STRING_LEN;
 
+pub use crate::validation::{
+    validate_evidence_hash, validate_evidence_reference, MAX_EVIDENCE_REF_LEN,
+    MIN_EVIDENCE_REF_LEN,
+};
+
 pub fn add_evidence(
     env: Env,
     caller: Address,
@@ -25,10 +30,7 @@ pub fn add_evidence(
         return Err(EscrowError::E83);
     }
 
-    let zero_hash = BytesN::from_array(&env, &[0u8; 32]);
-    if evidence_hash == zero_hash {
-        return Err(EscrowError::E80);
-    }
+    validate_evidence_hash(&env, &evidence_hash)?;
 
     let desc_len = description.len();
     if desc_len == 0 {

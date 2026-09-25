@@ -89,4 +89,101 @@ mod state_history_tests {
         assert_eq!(entry.to_status, EscrowStatus::Completed);
         assert_eq!(entry.caller, caller);
     }
+
+    #[test]
+    fn test_state_history_pruning_at_capacity() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let caller = Address::generate(&env);
+        let escrow_id = 42u64;
+
+        // Record more than MAX_STATE_HISTORY_ENTRIES (55 entries)
+        for i in 0..55 {
+            let status_from = if i % 2 == 0 {
+                EscrowStatus::Active
+            } else {
+                EscrowStatus::Disputed
+            };
+            let status_to = if i % 2 == 0 {
+                EscrowStatus::Disputed
+            } else {
+                EscrowStatus::Active
+            };
+            crate::state_history::record_state_change(
+                &env,
+                escrow_id,
+                status_from,
+                status_to,
+                &caller,
+            );
+        }
+
+        let history = crate::state_history::get_state_history(&env, escrow_id);
+        // Bounded retention: total entries should not exceed MAX_STATE_HISTORY_ENTRIES (50)
+        assert_eq!(history.len(), crate::state_history::MAX_STATE_HISTORY_ENTRIES);
+    }
+
+    #[test]
+    fn test_state_history_bounded_query() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let caller = Address::generate(&env);
+        let escrow_id = 99u64;
+
+        // Record 25 entries
+        for _ in 0..25 {
+            crate::state_history::record_state_change(
+                &env,
+                escrow_id,
+                EscrowStatus::Active,
+                EscrowStatus::Disputed,
+                &caller,
+            );
+        }
+
+        // Bounded query first page
+        let page1 = crate::state_history::get_state_history_bounded(&env, escrow_id, 0, 10);
+        assert_eq!(page1.len(), 10);
+
+        // Bounded query second page
+        let page2 = crate::state_history::get_state_history_bounded(&env, escrow_id, 10, 10);
+        assert_eq!(page2.len(), 10);
+
+        // Bounded query final partial page
+        let page3 = crate::state_history::get_state_history_bounded(&env, escrow_id, 20, 10);
+        assert_eq!(page3.len(), 5);
+
+        // Query beyond range returns empty
+        let page_empty = crate::state_history::get_state_history_bounded(&env, escrow_id, 30, 10);
+        assert_eq!(page_empty.len(), 0);
+
+        // Limit exceeding MAX_HISTORY_PAGE_SIZE is capped
+        let all_capped = crate::state_history::get_state_history_bounded(&env, escrow_id, 0, 100);
+        assert_eq!(all_capped.len(), 25);
+    }
+
+    #[test]
+    fn test_state_history_bounded_query_via_contract_client() {
+        let (env, _admin, client, freelancer, contract) = setup();
+        let token = register_token(&env, &_admin, &client, MAX_ESCROW_AMOUNT);
+        let escrow_id = contract
+            .create_escrow(
+                &client,
+                &freelancer,
+                &token,
+                &100_000,
+                &hash32(&env),
+                &None,
+                &None,
+                &None,
+                &None,
+                &no_multisig(&env),
+            )
+            .unwrap();
+
+        // Query bounded history via contract entry point
+        let page = contract.get_state_history_bounded(&escrow_id, &0, &10);
+        assert_eq!(page.len(), 1);
+        assert_eq!(page.get(0).unwrap().escrow_id, escrow_id);
+    }
 }

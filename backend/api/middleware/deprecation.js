@@ -39,21 +39,45 @@
 export const deprecate = (config) => {
   const {
     version,
+    warningDate,
     sunsetDate,
     replacement,
     message,
     documentationUrl = process.env.API_DOCS_URL || '/docs',
+    blockAfterSunset = true,
   } = config;
 
   // Validate configuration
   if (!version) {
     throw new Error('Deprecation config must include version');
   }
-  if (!sunsetDate || !(sunsetDate instanceof Date)) {
+  if (!sunsetDate || !(sunsetDate instanceof Date) || isNaN(sunsetDate.getTime())) {
     throw new Error('Deprecation config must include valid sunsetDate');
+  }
+  if (warningDate && (!(warningDate instanceof Date) || isNaN(warningDate.getTime()))) {
+    throw new Error('Deprecation config warningDate must be a valid Date object');
   }
 
   return (req, res, next) => {
+    const now = new Date();
+
+    // 1. After sunset: block access if sunset enforcement is active
+    if (blockAfterSunset && now > sunsetDate) {
+      return res.status(410).json({
+        error: 'Gone',
+        message: `This endpoint was sunset on ${sunsetDate.toISOString().split('T')[0]}`,
+        sunsetDate: sunsetDate.toISOString(),
+        documentation: documentationUrl,
+        ...(replacement ? { replacement } : {}),
+      });
+    }
+
+    // 2. Before warning date: route operates normally without deprecation headers
+    if (warningDate && now < warningDate) {
+      return next();
+    }
+
+    // 3. Warning window (warningDate <= now <= sunsetDate): emit deprecation & warning headers
     // Add Deprecation header (RFC 8594)
     res.setHeader('Deprecation', 'true');
 
@@ -76,6 +100,10 @@ export const deprecate = (config) => {
     res.setHeader('X-API-Deprecated', 'true');
     res.setHeader('X-API-Deprecated-Version', version);
     res.setHeader('X-API-Sunset-Date', sunsetDate.toISOString());
+
+    if (warningDate) {
+      res.setHeader('X-API-Warning-Date', warningDate.toISOString());
+    }
 
     if (replacement) {
       res.setHeader('X-API-Replacement', replacement);
@@ -118,7 +146,7 @@ export const deprecateVersion = (config) => {
  * Middleware to check if a deprecated endpoint has passed its sunset date
  * Returns 410 Gone if the sunset date has passed
  *
- * @param {Date} sunsetDate - The sunset date
+ * @param {Date|Object} configOrDate - The sunset date or config object
  * @returns {Function} Express middleware
  *
  * @example
@@ -127,8 +155,20 @@ export const deprecateVersion = (config) => {
  *   controller.handler
  * );
  */
-export const enforceSunset = (sunsetDate) => {
-  if (!(sunsetDate instanceof Date)) {
+export const enforceSunset = (configOrDate) => {
+  let sunsetDate;
+  let documentationUrl = process.env.API_DOCS_URL || '/docs';
+  let replacement;
+
+  if (configOrDate instanceof Date) {
+    sunsetDate = configOrDate;
+  } else if (configOrDate && typeof configOrDate === 'object') {
+    sunsetDate = configOrDate.sunsetDate;
+    documentationUrl = configOrDate.documentationUrl || documentationUrl;
+    replacement = configOrDate.replacement;
+  }
+
+  if (!sunsetDate || !(sunsetDate instanceof Date) || isNaN(sunsetDate.getTime())) {
     throw new Error('enforceSunset requires a valid Date object');
   }
 
@@ -140,7 +180,8 @@ export const enforceSunset = (sunsetDate) => {
         error: 'Gone',
         message: `This endpoint was sunset on ${sunsetDate.toISOString().split('T')[0]}`,
         sunsetDate: sunsetDate.toISOString(),
-        documentation: process.env.API_DOCS_URL || '/docs',
+        documentation: documentationUrl,
+        ...(replacement ? { replacement } : {}),
       });
     }
 

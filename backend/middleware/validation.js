@@ -127,3 +127,38 @@ export const signedXdrBody = body('signedXdr')
   .notEmpty()
   .isLength({ max: 100_000 })
   .withMessage('signedXdr must be a non-empty string under 100 000 chars');
+
+/**
+ * Validate accepted evidence hash / CID formats.
+ * Accepts:
+ * - IPFS CIDv0: Base58btc starting with 'Qm', exactly 46 chars.
+ * - IPFS CIDv1: Base32 starting with 'bafy' or 'bafk', 50-64 chars.
+ * - Hex SHA-256: 64 hex characters.
+ * Rejects empty values, oversized values (> 128 chars), and invalid characters.
+ */
+export function isValidEvidenceHash(value) {
+  if (!value || typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (trimmed.length < 32 || trimmed.length > 128) return false;
+  if (!/^[a-zA-Z0-9]+$/.test(trimmed)) return false;
+
+  if (trimmed.startsWith('Qm')) {
+    return trimmed.length === 46 && !/[0OIl]/.test(trimmed);
+  }
+  if (trimmed.startsWith('bafy') || trimmed.startsWith('bafk')) {
+    return trimmed.length >= 50 && trimmed.length <= 64;
+  }
+  if (trimmed.length === 64) {
+    return /^[0-9a-fA-F]{64}$/.test(trimmed);
+  }
+  return false;
+}
+
+export const evidenceHashValidator = (field = 'evidenceHash') =>
+  body(field).custom((val) => {
+    if (!val) throw new Error('Evidence hash cannot be empty');
+    if (typeof val !== 'string' || val.length > 128) throw new Error('Evidence hash oversized or invalid type');
+    if (!isValidEvidenceHash(val)) throw new Error('Invalid evidence hash or CID format');
+    return true;
+  });
+

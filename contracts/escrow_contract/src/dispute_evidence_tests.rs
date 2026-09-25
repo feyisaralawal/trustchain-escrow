@@ -198,4 +198,90 @@ mod dispute_evidence_tests {
         let count = contract.add_evidence(&freelancer, &escrow_id, &evidence_hash, &description);
         assert_eq!(count, 1);
     }
+
+    #[test]
+    fn test_validate_evidence_reference_valid_cidv0() {
+        let env = Env::default();
+        let valid_cidv0 =
+            String::from_str(&env, "QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco");
+        assert!(crate::validation::validate_evidence_reference(&valid_cidv0).is_ok());
+    }
+
+    #[test]
+    fn test_validate_evidence_reference_valid_cidv1() {
+        let env = Env::default();
+        let valid_cidv1 = String::from_str(
+            &env,
+            "bafybeic56wh45asvf7ggn7p7pu2475y7k7j6n72u5quq4pynvaxevv2nha",
+        );
+        assert!(crate::validation::validate_evidence_reference(&valid_cidv1).is_ok());
+    }
+
+    #[test]
+    fn test_validate_evidence_reference_valid_sha256_hex() {
+        let env = Env::default();
+        let valid_hex = String::from_str(
+            &env,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        );
+        assert!(crate::validation::validate_evidence_reference(&valid_hex).is_ok());
+    }
+
+    #[test]
+    fn test_validate_evidence_reference_rejects_empty() {
+        let env = Env::default();
+        let empty_ref = String::from_str(&env, "");
+        let err = crate::validation::validate_evidence_reference(&empty_ref);
+        assert_eq!(err, Err(crate::EscrowError::EvidenceEmpty));
+    }
+
+    #[test]
+    fn test_validate_evidence_reference_rejects_oversized() {
+        let env = Env::default();
+        // 129 characters exceeds MAX_EVIDENCE_REF_LEN (128)
+        let oversized = String::from_str(&env, &"a".repeat(129));
+        let err = crate::validation::validate_evidence_reference(&oversized);
+        assert_eq!(err, Err(crate::EscrowError::EvidenceTooLong));
+    }
+
+    #[test]
+    fn test_validate_evidence_reference_rejects_invalid_characters() {
+        let env = Env::default();
+        // Contains invalid symbols like '@', '!', spaces
+        let invalid_chars = String::from_str(
+            &env,
+            "QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6!@#",
+        );
+        let err = crate::validation::validate_evidence_reference(&invalid_chars);
+        assert_eq!(err, Err(crate::EscrowError::EvidenceInvalidFormat));
+    }
+
+    #[test]
+    fn test_validate_evidence_reference_rejects_malformed_cidv0() {
+        let env = Env::default();
+        // CIDv0 with invalid base58 character '0' (base58 excludes 0, O, I, l)
+        let malformed_base58 = String::from_str(
+            &env,
+            "Qm00000000000000000000000000000000000000000000",
+        );
+        let err = crate::validation::validate_evidence_reference(&malformed_base58);
+        assert_eq!(err, Err(crate::EscrowError::EvidenceInvalidFormat));
+    }
+
+    #[test]
+    fn test_validate_evidence_hash_valid() {
+        let env = Env::default();
+        let valid_hash = BytesN::from_array(&env, &[1u8; 32]);
+        assert!(crate::validation::validate_evidence_hash(&env, &valid_hash).is_ok());
+    }
+
+    #[test]
+    fn test_validate_evidence_hash_rejects_zero() {
+        let env = Env::default();
+        let zero_hash = BytesN::from_array(&env, &[0u8; 32]);
+        assert_eq!(
+            crate::validation::validate_evidence_hash(&env, &zero_hash),
+            Err(crate::EscrowError::E80)
+        );
+    }
 }

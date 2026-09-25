@@ -13,11 +13,19 @@ import { requireMfa } from '../middleware/mfaAuth.js';
 import adminController from '../controllers/adminController.js';
 import tenantController from '../controllers/tenantController.js';
 import * as featureFlagController from '../controllers/featureFlagController.js';
+import configController from '../controllers/configController.js';
 import { getAuditLog, rotateSecrets } from '../../lib/secrets.js';
 import cache from '../../lib/cache.js';
 
 // Apply admin authentication to all routes in this file
 router.use(adminAuth);
+
+// ── Runtime Config Checksum ──────────────────────────────────────────────────
+/**
+ * @route  GET /api/admin/config/checksum
+ * @desc   Returns safe runtime configuration checksum and hashes with secret masking
+ */
+router.get('/config/checksum', configController.getConfigChecksum);
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 /**
